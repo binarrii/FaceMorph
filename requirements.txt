@@ -1,10 +1,10 @@
 pillow
 numpy<2
 opencv-contrib-python
-tensorflow
+tensorflow==2.16.1
 tf-keras
-torch
-torchvision
+torch==2.4.1
+torchvision==0.19.1
 safetensors
 ultralytics
 matplotlib
