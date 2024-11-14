@@ -1,6 +1,13 @@
 pillow
 numpy
 opencv-contrib-python
+torch
 torchvision
+safetensors
 ultralytics
+deepface
 matplotlib
+onnxruntime
+mediapipe
+kornia
+setuptools
