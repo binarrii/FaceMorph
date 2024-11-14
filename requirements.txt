@@ -1,13 +1,15 @@
 pillow
-numpy
+numpy<2
 opencv-contrib-python
+tensorflow
+tf-keras
 torch
 torchvision
 safetensors
 ultralytics
-deepface
 matplotlib
 onnxruntime
 mediapipe
 kornia
+deepface
 setuptools
