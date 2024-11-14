@@ -1,4 +1,5 @@
 pillow
+numpy
 opencv-contrib-python
 torchvision
 ultralytics
