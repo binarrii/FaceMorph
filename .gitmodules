@@ -3,4 +3,4 @@
 	url = https://github.com/Ryuukeisyou/comfyui_face_parsing.git
 [submodule "contrib/ComfyUI_fnodes"]
 	path = contrib/ComfyUI_fnodes
-	url = https://github.com/syaofox/ComfyUI_fnodes.git
+	url = git@github.com:binarrii/ComfyUI_fnodes.git
