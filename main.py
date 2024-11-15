@@ -10,7 +10,7 @@ from contrib.ComfyUI_fnodes.utils.image_convert import pil2tensor, tensor2pil, p
 from deepface import DeepFace
 
 
-_CGREEN, _CRED, _YELLOW, _CEND = "\033[92m", "\033[91m", "\033[93m", "\033[97m"
+_CGREEN, _CRED, _CYELLOW, _CEND = "\033[92m", "\033[91m", "\033[93m", "\033[97m"
 
 base_path = os.path.dirname(os.path.realpath(__file__))
 models_dir = os.path.join(base_path, "models")
@@ -50,6 +50,8 @@ if __name__ == "__main__":
 
     for root, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
         for f in filter(png_or_jpg, files):
+            t0 = time.time()
+
             source_image_tensor = pil2tensor(Image.open(f"{_SOURCE_IMAGE_PATH}/{f}"))
             target_image_tensor = pil2tensor(Image.open(f"{_TARGET_IMAGE_PATH}/{f}"))
 
@@ -85,7 +87,6 @@ if __name__ == "__main__":
                         bbox=source_bbox,
                         image=source_image_tensor
                     )
-                    t0 = time.time()
                     same_face = DeepFace.verify(
                         ref_face_np,
                         pil2np(tensor2pil(cropped_source_image_tensor)),
@@ -93,7 +94,6 @@ if __name__ == "__main__":
                         detector_backend="skip",
                         enforce_detection=False
                     )
-                    print(f"{_YELLOW}[FaceMorph] face verify: {_SOURCE_IMAGE_PATH}/{f} {(time.time() - t0) * 1000}ms{_YELLOW}")
                     if same_face["verified"]:
                         source_face_matched = True
                         break
@@ -121,15 +121,13 @@ if __name__ == "__main__":
                     print(f"{_CRED}[FaceMorph] no face matched in target: {_TARGET_IMAGE_PATH}/{f}{_CEND}")
                     continue
 
-                t0 = time.time()
                 warped_image_tensor, = face_morph.execute(
                     source_image=cropped_source_image_tensor,
                     target_image=cropped_target_image_tensor,
                     landmark_type="OUTLINE",
                     align_type="Landmarks",
-                    onnx_device="CUDA",
+                    onnx_device="torch_gpu",
                 )
-                print(f"{_YELLOW}[FaceMorph] face warp: {_SOURCE_IMAGE_PATH}/{f} {(time.time() - t0) * 1000}ms{_YELLOW}")
 
                 final_image_tensor, = image_insert_with_bbox.main(
                     bbox=target_bbox,
@@ -141,6 +139,7 @@ if __name__ == "__main__":
                 print(f"{_CGREEN}[FaceMorph] source: {_SOURCE_IMAGE_PATH}/{f}{_CEND}")
                 print(f"{_CGREEN}[FaceMorph] target: {_TARGET_IMAGE_PATH}/{f}{_CEND}")
                 print(f"{_CGREEN}[FaceMorph] result: {_RESULT_IMAGE_PATH}/{f}{_CEND}")
+                print(f"{_CYELLOW}[FaceMorph] time taken: {f} {(time.time() - t0) * 1000}ms{_CEND}")
             except:
                 traceback.print_exc()
                 print(f"{_CRED}[FaceMorph] error occurred: {_SOURCE_IMAGE_PATH}/{f}{_CEND}")
