@@ -13,7 +13,7 @@ git submodule update --init --recursive
 
 ``` bash
 
-# Install uv if needed : (https://docs.astral.sh/uv/getting-started/installation)
+# Install uv if needed: (See https://docs.astral.sh/uv/getting-started/installation)
 
 uv venv --python 3.10
 source .venv/bin/activate
@@ -21,5 +21,19 @@ source .venv/bin/activate
 uv pip install -r requirements.txt
 
 python main.py --workdir "/mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试" --refface female
+
+```
+
+```bash
+
+# Notice: Ensure the following directory structure
+
+/mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试
+├── female
+├── female_morphed_face
+├── female.png
+├── female_predict_face
+├── female_skipped.txt
+└── male
 
 ```
