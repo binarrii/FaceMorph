@@ -24,6 +24,7 @@ if __name__ == "__main__":
     _SOURCE_IMAGE_PATH = f"{args.workdir}/{args.refface}"
     _TARGET_IMAGE_PATH = f"{args.workdir}/{args.refface}_predict_face"
     _RESULT_IMAGE_PATH = f"{args.workdir}/{args.refface}_morphed_face"
+    _SKIPED_IMAGE_LIST = f"{args.workdir}/{args.refface}_skipped.txt"
 
     if not os.path.exists(_RESULT_IMAGE_PATH):
         os.makedirs(_RESULT_IMAGE_PATH, exist_ok=True)
@@ -47,6 +48,9 @@ if __name__ == "__main__":
         return (not filename.startswith('.')) and \
             (filename.endswith('.png') or filename.endswith('.jpg'))
 
+    if os.path.exists(_SKIPED_IMAGE_LIST):
+        os.remove(_SKIPED_IMAGE_LIST)
+    skipped = open(_SKIPED_IMAGE_LIST, 'a')
 
     for root, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
         for f in filter(png_or_jpg, files):
@@ -66,6 +70,7 @@ if __name__ == "__main__":
                     by_ratio=True,
                 )
                 if source_cnt <= 0:
+                    skipped.write(f"{_SOURCE_IMAGE_PATH}/{f}\n")
                     print(f"{_CRED}[FaceMorph] no face detected in source: {_SOURCE_IMAGE_PATH}/{f}{_CEND}")
                     continue
 
@@ -78,6 +83,7 @@ if __name__ == "__main__":
                     by_ratio=True,
                 )
                 if target_cnt <= 0:
+                    skipped.write(f"{_TARGET_IMAGE_PATH}/{f}\n")
                     print(f"{_CRED}[FaceMorph] no face detected in target: {_TARGET_IMAGE_PATH}/{f}{_CEND}")
                     continue
 
@@ -98,6 +104,7 @@ if __name__ == "__main__":
                         source_face_matched = True
                         break
                 if not source_face_matched:
+                    skipped.write(f"{_SOURCE_IMAGE_PATH}/{f}\n")
                     print(f"{_CRED}[FaceMorph] no face matched in source: {_SOURCE_IMAGE_PATH}/{f}{_CEND}")
                     continue
 
@@ -118,6 +125,7 @@ if __name__ == "__main__":
                         target_face_matched = True
                         break
                 if not target_face_matched:
+                    skipped.write(f"{_TARGET_IMAGE_PATH}/{f}\n")
                     print(f"{_CRED}[FaceMorph] no face matched in target: {_TARGET_IMAGE_PATH}/{f}{_CEND}")
                     continue
 
@@ -141,6 +149,9 @@ if __name__ == "__main__":
                 print(f"{_CGREEN}[FaceMorph] result: {_RESULT_IMAGE_PATH}/{f}{_CEND}")
                 print(f"{_CYELLOW}[FaceMorph] time taken: {f} {(time.time() - t0) * 1000}ms{_CEND}")
             except:
+                skipped.write(f"{_SOURCE_IMAGE_PATH}/{f}\n")
                 traceback.print_exc()
                 print(f"{_CRED}[FaceMorph] error occurred: {_SOURCE_IMAGE_PATH}/{f}{_CEND}")
                 print(f"{_CRED}[FaceMorph] error occurred: {_TARGET_IMAGE_PATH}/{f}{_CEND}")
+
+    skipped.close()
