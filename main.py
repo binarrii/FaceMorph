@@ -15,7 +15,7 @@ from PIL import Image
 from ultralytics import YOLO
 
 
-_CGREEN, _CRED, _CYELLOW, _CEND = "\033[92m", "\033[91m", "\033[93m", "\033[97m"
+_CGREEN, _CRED, _CYELLOW, _CEND = "\033[92m", "\033[91m", "\033[93m", "\033[0m"
 _IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg']
 _YOLO_MODEL_PATH = "models/ultralytics/bbox/face_yolov8m.pt"
 
@@ -38,7 +38,7 @@ class FaceMorpher:
                 return pil2np(Image.open(path).convert('RGB'))
         raise FileNotFoundError(path)
 
-    def morph_face(self, source_image_path: str, target_image_path: str, result_image_path: str):
+    def __call__(self, source_image_path: str, target_image_path: str, result_image_path: str):
         """
         Returns: tuple[bool, str, str, str]
         """
@@ -149,13 +149,14 @@ def _init_worker(args: Namespace):
     try:
         _face_morpher = FaceMorpher(args.workdir, args.refface)
     except:
+        traceback.print_exc()
         sys.exit(1)
 
 def _morph_face(args: Namespace, f: str):
     source_image_path = f"{args.workdir}/{args.refface}/{f}"
     target_image_path = f"{args.workdir}/{args.refface}_predict_face/{f}"
     result_image_path = f"{args.workdir}/{args.refface}_morphed_face/{f}"
-    return _face_morpher.morph_face(source_image_path, target_image_path, result_image_path)
+    return _face_morpher(source_image_path, target_image_path, result_image_path)
 
 
 if __name__ == "__main__":
@@ -186,8 +187,8 @@ if __name__ == "__main__":
             for f in filter(_png_or_jpg, files):
                 future_results.append(executor.submit(_morph_face, args, f))
     
-    with open(_SKIPED_IMAGE_LIST, 'a+') as f:
+    with open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
         for future in future_results:
             ok, source, target, result = future.result()
             if not ok:
-                f.write(f"{source}\n")
+                skipped.write(f"{source}\n")
