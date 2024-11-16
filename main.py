@@ -1,6 +1,7 @@
 import argparse
 import multiprocessing
 import os
+import sys
 import time
 import traceback
 
@@ -145,7 +146,10 @@ _face_morpher = None
 
 def _init_worker(args: Namespace):
     global _face_morpher
-    _face_morpher = FaceMorpher(args.workdir, args.refface)
+    try:
+        _face_morpher = FaceMorpher(args.workdir, args.refface)
+    except:
+        sys.exit(1)
 
 def _morph_face(args: Namespace, f: str):
     source_image_path = f"{args.workdir}/{args.refface}/{f}"
