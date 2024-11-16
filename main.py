@@ -172,14 +172,14 @@ if __name__ == "__main__":
     if os.path.exists(_SKIPED_IMAGE_LIST):
         os.remove(_SKIPED_IMAGE_LIST)
 
-    def png_or_jpg(filename: str):
+    def _png_or_jpg(filename: str):
         return (not filename.startswith('.')) and (os.path.splitext(filename)[1] in _IMAGE_EXTENSIONS)
 
     multiprocessing.set_start_method('spawn')
     with ProcessPoolExecutor(max_workers=_N, initializer=_init_worker, initargs=(args,)) as executor:
         future_results = []
         for roots, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
-            for f in filter(png_or_jpg, files):
+            for f in filter(_png_or_jpg, files):
                 future_results.append(executor.submit(_morph_face, args, f))
     
     with open(_SKIPED_IMAGE_LIST, 'a+') as f:
