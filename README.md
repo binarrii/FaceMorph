@@ -20,7 +20,9 @@ source .venv/bin/activate
 
 uv pip install -r requirements.txt
 
-python main.py --workdir "/mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试" --refface female
+python main.py --workdir="/mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试" \
+               --refface=female \
+               --workers=2
 
 ```
 
@@ -29,11 +31,11 @@ python main.py --workdir "/mnt/onas/share4/frame_after_swap_for_post_processing/
 # Notice: Ensure the following directory structure
 
 /mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试
-├── female
-├── female_morphed_face
+├── female/
+├── female_morphed_face/
 ├── female.png
-├── female_predict_face
+├── female_predict_face/
 ├── female_skipped.txt
-└── male
+└── male/
 
 ```
