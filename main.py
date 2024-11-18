@@ -122,7 +122,7 @@ class FaceMorpher:
             )
 
             final_image_tensor, = self.image_insert_with_bbox.main(
-                bbox=target_bbox,
+                bbox=source_bbox,
                 image_src=source_image_tensor,
                 image=warped_image_tensor
             )
