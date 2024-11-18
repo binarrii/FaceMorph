@@ -147,7 +147,8 @@ _face_morpher = None
 def _init_worker(args: Namespace):
     global _face_morpher
     try:
-        _face_morpher = FaceMorpher(args.workdir, args.refface)
+        if _face_morpher is None:
+            _face_morpher = FaceMorpher(args.workdir, args.refface)
     except:
         traceback.print_exc()
         sys.exit(1)
@@ -163,7 +164,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Face Morph')
     parser.add_argument('--workdir', required=True, type=str, default="")
     parser.add_argument('--refface', required=True, type=str, default="")
-    parser.add_argument('--workers', required=False, type=int, default=4)
+    parser.add_argument('--workers', required=False, type=int, default=2)
     args, _ = parser.parse_known_args()
 
     _SOURCE_IMAGE_PATH = f"{args.workdir}/{args.refface}"
