@@ -1,4 +1,5 @@
 import argparse
+import glob
 import multiprocessing
 import os
 import sys
@@ -7,23 +8,25 @@ import traceback
 
 from argparse import Namespace
 from concurrent.futures import ProcessPoolExecutor
+
 from contrib.ComfyUI_face_parsing.face_parsing_nodes import BBoxDetect, ImageCropWithBBox, ImageInsertWithBBox
 from contrib.ComfyUI_fnodes.face_morph import FaceMorph
 from contrib.ComfyUI_fnodes.utils.image_convert import pil2tensor, tensor2pil, pil2np
 from deepface import DeepFace
 from PIL import Image
+from torch import Tensor
 from ultralytics import YOLO
 
 
 _CGREEN, _CRED, _CYELLOW, _CEND = "\033[92m", "\033[91m", "\033[93m", "\033[0m"
-_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg']
+_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.webp']
 _YOLO_MODEL_PATH = "models/ultralytics/bbox/face_yolov8m.pt"
 
 
 class FaceMorpher:
 
     def __init__(self, workdir: str, ref_face: str):
-        self.ref_face_np = self._ref_face_np(workdir, ref_face)
+        self.ref_faces_np = self._ref_faces_np(workdir, ref_face)
         self.bbox_detector = YOLO(model=_YOLO_MODEL_PATH)
         self.bbox_detect = BBoxDetect()
         self.image_crop_with_bbox = ImageCropWithBBox()
@@ -31,12 +34,28 @@ class FaceMorpher:
         self.face_morph = FaceMorph()
 
     @staticmethod
-    def _ref_face_np(workdir: str, ref_face: str):
+    def _ref_faces_np(workdir: str, ref_face: str):
+        faces_np = []
         for ext in _IMAGE_EXTENSIONS:
-            path = f'{workdir}/{ref_face}{ext}'
-            if os.path.exists(path):
-                return pil2np(Image.open(path).convert('RGB'))
-        raise FileNotFoundError(path)
+            for f in glob.iglob(f"{ref_face}*{ext}", root_dir=workdir):
+                face_pil = Image.open(f"{workdir}/{f}").convert('RGB')
+                faces_np.append(pil2np(face_pil))
+        if len(faces_np) > 0:
+            return faces_np
+        raise FileNotFoundError(f"`{ref_face}` not found in {workdir}")
+    
+    def _verify(self, image: Tensor):
+        for ref_face_np in self.ref_faces_np:
+            same_face = DeepFace.verify(
+                ref_face_np,
+                pil2np(tensor2pil(image)),
+                model_name="VGG-Face",
+                detector_backend="skip",
+                enforce_detection=False
+            )
+            if same_face["verified"]:
+                return True
+        return False
 
     def __call__(self, source_image_path: str, target_image_path: str, result_image_path: str):
         """
@@ -58,6 +77,7 @@ class FaceMorpher:
                 by_ratio=True,
             )
             if source_cnt <= 0:
+                tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in source: {source_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None)
 
@@ -70,6 +90,7 @@ class FaceMorpher:
                 by_ratio=True,
             )
             if target_cnt <= 0:
+                tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in target: {target_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None)
 
@@ -79,17 +100,11 @@ class FaceMorpher:
                     bbox=source_bbox,
                     image=source_image_tensor
                 )
-                same_face = DeepFace.verify(
-                    self.ref_face_np,
-                    pil2np(tensor2pil(cropped_source_image_tensor)),
-                    model_name="VGG-Face",
-                    detector_backend="skip",
-                    enforce_detection=False
-                )
-                if same_face["verified"]:
+                if self._verify(cropped_source_image_tensor):
                     source_face_matched = True
                     break
             if not source_face_matched:
+                tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face matched in source: {source_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None)
 
@@ -99,17 +114,11 @@ class FaceMorpher:
                     bbox=target_bbox,
                     image=target_image_tensor
                 )
-                same_face = DeepFace.verify(
-                    self.ref_face_np,
-                    pil2np(tensor2pil(cropped_target_image_tensor)),
-                    model_name="VGG-Face",
-                    detector_backend="skip",
-                    enforce_detection=False
-                )
-                if same_face["verified"]:
+                if self._verify(cropped_target_image_tensor):
                     target_face_matched = True
                     break
             if not target_face_matched:
+                tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face matched in target: {target_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None)
 
@@ -134,6 +143,7 @@ class FaceMorpher:
             print(f"{_CYELLOW}[FaceMorph] time taken: \
                   {os.path.basename(source_image_path)} {(time.time() - t0) * 1000}ms{_CEND}")
         except:
+            tensor2pil(source_image_tensor).save(result_image_path)
             traceback.print_exc()
             print(f"{_CRED}[FaceMorph] error occurred: {source_image_path}{_CEND}")
             print(f"{_CRED}[FaceMorph] error occurred: {target_image_path}{_CEND}")
