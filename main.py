@@ -54,7 +54,7 @@ class FaceMorpher:
                 image=source_image_tensor,
                 threshold=0.5,
                 dilation=20,
-                dilation_ratio=0.5,
+                dilation_ratio=0.3,
                 by_ratio=True,
             )
             if source_cnt <= 0:
@@ -66,7 +66,7 @@ class FaceMorpher:
                 image=target_image_tensor,
                 threshold=0.5,
                 dilation=20,
-                dilation_ratio=0.5,
+                dilation_ratio=0.3,
                 by_ratio=True,
             )
             if target_cnt <= 0:
