@@ -217,9 +217,10 @@ if __name__ == "__main__":
     multiprocessing.set_start_method('spawn')
     with ProcessPoolExecutor(max_workers=_N, initializer=_init_worker, initargs=(args,)) as executor:
         future_results = []
-        for roots, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
+        for root, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
             for f in filter(_png_or_jpg, sorted(files)):
                 future_results.append(executor.submit(_morph_face, args, f))
+            break
     
     with open(_FFMPEG_FILES_LIST, 'w+') as morphed, open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
         for future in future_results:
@@ -244,4 +245,4 @@ if __name__ == "__main__":
             f"{args.refface}_morphed.mp4",
         ], cwd=args.workdir)
 
-    print(f"{_CYELLOW}[FaceMorph] time taken (total): {(time.time() - t0) * 1000}ms{_CEND}")
+    print(f"{_CYELLOW}[FaceMorph] time taken (total): {(time.time() - t0)}s{_CEND}")
