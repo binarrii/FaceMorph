@@ -229,8 +229,9 @@ if __name__ == "__main__":
                 morphed.write("duration 0.04\n")
             else:
                 skipped.write(f"{err_code} @@ {source}\n")
-                morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
-                morphed.write("duration 0.04\n")
+                if err_code != 30:
+                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
+                    morphed.write("duration 0.04\n")
 
     if args.genvideo:
         subprocess.call([
