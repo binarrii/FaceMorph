@@ -22,6 +22,7 @@ uv pip install -r requirements.txt
 
 python main.py --workdir="/mnt/onas/share4/frame_after_swap_for_post_processing/ep-测试" \
                --refface=female \
+               --genvideo \
                --workers=2
 
 ```
