@@ -2,6 +2,7 @@ import argparse
 import glob
 import multiprocessing
 import os
+import subprocess
 import sys
 import time
 import traceback
@@ -10,7 +11,7 @@ from argparse import Namespace
 from concurrent.futures import ProcessPoolExecutor
 
 from contrib.ComfyUI_face_parsing.face_parsing_nodes import BBoxDetect, ImageCropWithBBox, ImageInsertWithBBox
-from contrib.ComfyUI_fnodes.face_morph import FaceMorph
+from contrib.ComfyUI_fnodes.face_morph import FaceMorph, LandmarkExtractError
 from contrib.ComfyUI_fnodes.utils.image_convert import pil2tensor, tensor2pil, pil2np
 from deepface import DeepFace
 from PIL import Image
@@ -59,7 +60,7 @@ class FaceMorpher:
 
     def __call__(self, source_image_path: str, target_image_path: str, result_image_path: str):
         """
-        Returns: tuple[bool, str, str, str]
+        Returns: tuple[bool, str, str, str, int]
         """
         t0 = time.time()
 
@@ -79,7 +80,7 @@ class FaceMorpher:
             if source_cnt <= 0:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in source: {source_image_path}{_CEND}")
-                return (False, source_image_path, target_image_path, None)
+                return (False, source_image_path, target_image_path, None, 10)
 
             target_bboxes, target_cnt = self.bbox_detect.main(
                 bbox_detector=self.bbox_detector,
@@ -92,7 +93,7 @@ class FaceMorpher:
             if target_cnt <= 0:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in target: {target_image_path}{_CEND}")
-                return (False, source_image_path, target_image_path, None)
+                return (False, source_image_path, target_image_path, None, 11)
 
             cropped_source_image_tensor, source_face_matched = None, False
             for source_bbox in source_bboxes:
@@ -106,7 +107,7 @@ class FaceMorpher:
             if not source_face_matched:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face matched in source: {source_image_path}{_CEND}")
-                return (False, source_image_path, target_image_path, None)
+                return (False, source_image_path, target_image_path, None, 20)
 
             cropped_target_image_tensor, target_face_matched = None, False
             for target_bbox in target_bboxes:
@@ -120,15 +121,20 @@ class FaceMorpher:
             if not target_face_matched:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face matched in target: {target_image_path}{_CEND}")
-                return (False, source_image_path, target_image_path, None)
+                return (False, source_image_path, target_image_path, None, 21)
 
-            warped_image_tensor, = self.face_morph.execute(
-                source_image=cropped_source_image_tensor,
-                target_image=cropped_target_image_tensor,
-                landmark_type="OUTLINE",
-                align_type="Landmarks",
-                onnx_device="torch_gpu",
-            )
+            try:
+                warped_image_tensor, = self.face_morph.execute(
+                    source_image=cropped_source_image_tensor,
+                    target_image=cropped_target_image_tensor,
+                    landmark_type="OUTLINE",
+                    align_type="Landmarks",
+                    onnx_device="torch_gpu",
+                )
+            except LandmarkExtractError:
+                tensor2pil(source_image_tensor).save(result_image_path)
+                print(f"{_CRED}[FaceMorph] can't extract face landmark: {target_image_path}{_CEND}")
+                return (False, source_image_path, target_image_path, None, 30)
 
             final_image_tensor, = self.image_insert_with_bbox.main(
                 bbox=source_bbox,
@@ -147,9 +153,9 @@ class FaceMorpher:
             traceback.print_exc()
             print(f"{_CRED}[FaceMorph] error occurred: {source_image_path}{_CEND}")
             print(f"{_CRED}[FaceMorph] error occurred: {target_image_path}{_CEND}")
-            return (False, source_image_path, target_image_path, None)
+            return (False, source_image_path, target_image_path, None, 50)
         
-        return (True, source_image_path, target_image_path, result_image_path)
+        return (True, source_image_path, target_image_path, result_image_path, 0)
 
 
 _face_morpher = None
@@ -175,11 +181,16 @@ if __name__ == "__main__":
     parser.add_argument('--workdir', required=True, type=str, default="")
     parser.add_argument('--refface', required=True, type=str, default="")
     parser.add_argument('--workers', required=False, type=int, default=2)
+    parser.add_argument('--mpthres', required=False, type=float, default=0.3)
+    parser.add_argument('--genvideo', action='store_true', default=False)
     args, _ = parser.parse_known_args()
+
+    os.environ['MP_FACE_DETECTION_CONFIDENCE'] = str(args.mpthres)
 
     _SOURCE_IMAGE_PATH = f"{args.workdir}/{args.refface}"
     _RESULT_IMAGE_PATH = f"{args.workdir}/{args.refface}_morphed_face"
     _SKIPED_IMAGE_LIST = f"{args.workdir}/{args.refface}_skipped.txt"
+    _FFMPEG_FILES_LIST = f"{args.workdir}/{args.refface}_morphed.txt"
     _N = min(8, max(1, args.workers))
 
     if not os.path.exists(_RESULT_IMAGE_PATH):
@@ -188,18 +199,42 @@ if __name__ == "__main__":
     if os.path.exists(_SKIPED_IMAGE_LIST):
         os.remove(_SKIPED_IMAGE_LIST)
 
+    if os.path.exists(_FFMPEG_FILES_LIST):
+        os.remove(_FFMPEG_FILES_LIST)
+
     def _png_or_jpg(filename: str):
         return (not filename.startswith('.')) and (os.path.splitext(filename)[1] in _IMAGE_EXTENSIONS)
+
+    t0 = time.time()
 
     multiprocessing.set_start_method('spawn')
     with ProcessPoolExecutor(max_workers=_N, initializer=_init_worker, initargs=(args,)) as executor:
         future_results = []
         for roots, dirs, files in os.walk(_SOURCE_IMAGE_PATH):
-            for f in filter(_png_or_jpg, files):
+            for f in filter(_png_or_jpg, sorted(files)):
                 future_results.append(executor.submit(_morph_face, args, f))
     
-    with open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
-        for future in future_results:
-            ok, source, target, result = future.result()
-            if not ok:
-                skipped.write(f"{source}\n")
+    with open(_FFMPEG_FILES_LIST, 'w+') as morphed:
+        with open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
+            for future in future_results:
+                ok, source, target, result, err_code = future.result()
+                if ok:
+                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(result)}'\n")
+                    morphed.write("duration 0.04\n")
+                else:
+                    skipped.write(f"{err_code} @@ {source}\n")
+                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
+                    morphed.write("duration 0.04\n")
+
+    if args.genvideo:
+        subprocess.call([
+            'ffmpeg', '-y',
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', f"{os.path.basename(_FFMPEG_FILES_LIST)}",
+            '-c:v', 'h264_nvenc',
+            '-pix_fmt', 'yuv420p',
+            f"{args.refface}_morphed.mp4",
+        ], cwd=args.workdir)
+
+    print(f"{_CYELLOW}[FaceMorph] time taken (total): {(time.time() - t0) * 1000}ms{_CEND}")
