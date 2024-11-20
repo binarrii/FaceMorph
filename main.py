@@ -53,7 +53,8 @@ class FaceMorpher:
                 pil2np(tensor2pil(image)),
                 model_name="VGG-Face",
                 detector_backend="skip",
-                enforce_detection=False
+                enforce_detection=False,
+                threshold=0.6,
             )
             if same_face["verified"]:
                 return True
@@ -182,7 +183,7 @@ if __name__ == "__main__":
     parser.add_argument('--workdir', required=True, type=str, default="")
     parser.add_argument('--refface', required=True, type=str, default="")
     parser.add_argument('--workers', required=False, type=int, default=2)
-    parser.add_argument('--mpthres', required=False, type=float, default=0.3)
+    parser.add_argument('--mpthres', required=False, type=float, default=1e-7)
     parser.add_argument('--genvideo', action='store_true', default=False)
     args, _ = parser.parse_known_args()
 
@@ -230,9 +231,8 @@ if __name__ == "__main__":
                 morphed.write("duration 0.04\n")
             else:
                 skipped.write(f"{err_code} @@ {source}\n")
-                if err_code != 30:
-                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
-                    morphed.write("duration 0.04\n")
+                morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
+                morphed.write("duration 0.04\n")
 
     if args.genvideo:
         subprocess.call([
