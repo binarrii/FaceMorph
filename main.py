@@ -2,6 +2,7 @@ import argparse
 import glob
 import multiprocessing
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -204,6 +205,12 @@ if __name__ == "__main__":
 
     def _png_or_jpg(filename: str):
         return (not filename.startswith('.')) and (os.path.splitext(filename)[1] in _IMAGE_EXTENSIONS)
+    
+    def _handle_interrupt(signum, frame):
+        executor.shutdown(wait=True, cancel_futures=True)
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _handle_interrupt)
 
     t0 = time.time()
 
@@ -214,17 +221,16 @@ if __name__ == "__main__":
             for f in filter(_png_or_jpg, sorted(files)):
                 future_results.append(executor.submit(_morph_face, args, f))
     
-    with open(_FFMPEG_FILES_LIST, 'w+') as morphed:
-        with open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
-            for future in future_results:
-                ok, source, target, result, err_code = future.result()
-                if ok:
-                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(result)}'\n")
-                    morphed.write("duration 0.04\n")
-                else:
-                    skipped.write(f"{err_code} @@ {source}\n")
-                    morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
-                    morphed.write("duration 0.04\n")
+    with open(_FFMPEG_FILES_LIST, 'w+') as morphed, open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
+        for future in future_results:
+            ok, source, target, result, err_code = future.result()
+            if ok:
+                morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(result)}'\n")
+                morphed.write("duration 0.04\n")
+            else:
+                skipped.write(f"{err_code} @@ {source}\n")
+                morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
+                morphed.write("duration 0.04\n")
 
     if args.genvideo:
         subprocess.call([
