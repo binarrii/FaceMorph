@@ -37,17 +37,34 @@ class FaceMorpher:
 
     @staticmethod
     def _ref_faces_np(workdir: str, ref_face: str):
-        faces_np = []
+        faces_positive_np, faces_negtive_np = [], []
         for ext in _IMAGE_EXTENSIONS:
             for f in glob.iglob(f"{ref_face}*{ext}", root_dir=workdir):
                 face_pil = Image.open(f"{workdir}/{f}").convert('RGB')
-                faces_np.append(pil2np(face_pil))
-        if len(faces_np) > 0:
-            return faces_np
+                if f.startswith(f"{ref_face}+_"):
+                    faces_positive_np.append(pil2np(face_pil))
+                elif f.startswith(f"{ref_face}-_"):
+                    faces_negtive_np.append(pil2np(face_pil))
+                else:
+                    faces_positive_np.append(pil2np(face_pil))
+        if len(faces_positive_np) > 0:
+            return (faces_positive_np, faces_negtive_np)
         raise FileNotFoundError(f"`{ref_face}` not found in {workdir}")
     
     def _verify(self, image: Tensor):
-        for ref_face_np in self.ref_faces_np:
+        faces_positive_np, faces_negtive_np = self.ref_faces_np
+        for ref_face_np in faces_negtive_np:
+            same_face = DeepFace.verify(
+                ref_face_np,
+                pil2np(tensor2pil(image)),
+                model_name="VGG-Face",
+                detector_backend="skip",
+                enforce_detection=False,
+                threshold=0.5,
+            )
+            if same_face["verified"]:
+                return False
+        for ref_face_np in faces_positive_np:
             same_face = DeepFace.verify(
                 ref_face_np,
                 pil2np(tensor2pil(image)),
@@ -224,15 +241,17 @@ if __name__ == "__main__":
             break
     
     with open(_FFMPEG_FILES_LIST, 'w+') as morphed, open(_SKIPED_IMAGE_LIST, 'a+') as skipped:
-        for future in future_results:
+        _FPS = 25
+        for idx, future in enumerate(future_results):
             ok, source, target, result, err_code = future.result()
             if ok:
                 morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(result)}'\n")
-                morphed.write("duration 0.04\n")
+                morphed.write(f"duration {1 / _FPS}\n")
             else:
-                skipped.write(f"{err_code} @@ {source}\n")
+                pos = time.strftime('%H:%M:%S', time.gmtime(idx // _FPS))
+                skipped.write(f"{err_code} @@ {pos} @@ {source}\n")
                 morphed.write(f"file '{args.refface}_morphed_face/{os.path.basename(source)}'\n")
-                morphed.write("duration 0.04\n")
+                morphed.write(f"duration {1 / _FPS}\n")
 
     if args.genvideo:
         subprocess.call([
