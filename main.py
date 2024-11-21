@@ -60,7 +60,7 @@ class FaceMorpher:
                 model_name="VGG-Face",
                 detector_backend="skip",
                 enforce_detection=False,
-                threshold=0.5,
+                threshold=0.4,
             )
             if same_face["verified"]:
                 return False
@@ -71,7 +71,7 @@ class FaceMorpher:
                 model_name="VGG-Face",
                 detector_backend="skip",
                 enforce_detection=False,
-                threshold=0.6,
+                threshold=0.5,
             )
             if same_face["verified"]:
                 return True
