@@ -37,41 +37,36 @@ class FaceMorpher:
 
     @staticmethod
     def _ref_faces_np(workdir: str, ref_face: str):
-        faces_positive_np, faces_negtive_np = [], []
+        faces_source_np, faces_target_np = [], []
         for ext in _IMAGE_EXTENSIONS:
-            for f in glob.iglob(f"{ref_face}*{ext}", root_dir=workdir):
+            for f in glob.iglob(f"{ref_face}_*{ext}", root_dir=workdir):
                 face_pil = Image.open(f"{workdir}/{f}").convert('RGB')
-                if f.startswith(f"{ref_face}+_"):
-                    faces_positive_np.append(pil2np(face_pil))
-                elif f.startswith(f"{ref_face}-_"):
-                    faces_negtive_np.append(pil2np(face_pil))
+                if f.startswith(f"{ref_face}_source_"):
+                    faces_source_np.append(pil2np(face_pil))
+                elif f.startswith(f"{ref_face}_target_"):
+                    faces_target_np.append(pil2np(face_pil))
                 else:
-                    faces_positive_np.append(pil2np(face_pil))
-        if len(faces_positive_np) > 0:
-            return (faces_positive_np, faces_negtive_np)
+                    faces_source_np.append(pil2np(face_pil))
+        if len(faces_source_np) > 0:
+            return (faces_source_np, faces_target_np)
         raise FileNotFoundError(f"`{ref_face}` not found in {workdir}")
     
-    def _verify(self, image: Tensor):
-        faces_positive_np, faces_negtive_np = self.ref_faces_np
-        for ref_face_np in faces_negtive_np:
+    def _verify(self, image: Tensor, flag: str):
+        if flag == 'source':
+            ref_faces_np = self.ref_faces_np[0]
+        elif flag == 'target':
+            ref_faces_np = self.ref_faces_np[1]
+        else:
+            ref_faces_np = []
+        
+        for ref_face_np in ref_faces_np:
             same_face = DeepFace.verify(
                 ref_face_np,
                 pil2np(tensor2pil(image)),
                 model_name="VGG-Face",
                 detector_backend="skip",
                 enforce_detection=False,
-                threshold=0.4,
-            )
-            if same_face["verified"]:
-                return False
-        for ref_face_np in faces_positive_np:
-            same_face = DeepFace.verify(
-                ref_face_np,
-                pil2np(tensor2pil(image)),
-                model_name="VGG-Face",
-                detector_backend="skip",
-                enforce_detection=False,
-                threshold=0.5,
+                threshold=0.6,
             )
             if same_face["verified"]:
                 return True
@@ -120,7 +115,7 @@ class FaceMorpher:
                     bbox=source_bbox,
                     image=source_image_tensor
                 )
-                if self._verify(cropped_source_image_tensor):
+                if self._verify(cropped_source_image_tensor, flag='source'):
                     source_face_matched = True
                     break
             if not source_face_matched:
@@ -134,7 +129,7 @@ class FaceMorpher:
                     bbox=target_bbox,
                     image=target_image_tensor
                 )
-                if self._verify(cropped_target_image_tensor):
+                if self._verify(cropped_target_image_tensor, flag='target'):
                     target_face_matched = True
                     break
             if not target_face_matched:
