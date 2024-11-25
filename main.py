@@ -63,14 +63,24 @@ class FaceMorpher:
             same_face = DeepFace.verify(
                 ref_face_np,
                 pil2np(tensor2pil(image)),
-                model_name="VGG-Face",
+                model_name="Facenet512",
                 detector_backend="skip",
                 enforce_detection=False,
-                threshold=0.5,
+                threshold=0.29,
             )
             if same_face["verified"]:
                 return True
         return False
+    
+    @staticmethod
+    def _filter_size(bboxes, thres: int=200):
+        result_bboxes = []
+        for bbox in bboxes:
+            left, top, right, bottom = bbox
+            w, h = right - left, bottom - top
+            if min(w, h) > thres:
+                result_bboxes.append(bbox)
+        return result_bboxes
 
     def __call__(self, source_image_path: str, target_image_path: str, result_image_path: str):
         """
@@ -83,7 +93,7 @@ class FaceMorpher:
 
         # noinspection PyBroadException
         try:
-            source_bboxes, source_cnt = self.bbox_detect.main(
+            source_bboxes, _ = self.bbox_detect.main(
                 bbox_detector=self.bbox_detector,
                 image=source_image_tensor,
                 threshold=0.5,
@@ -91,12 +101,13 @@ class FaceMorpher:
                 dilation_ratio=0.3,
                 by_ratio=True,
             )
-            if source_cnt <= 0:
+            source_bboxes = self._filter_size(source_bboxes)
+            if len(source_bboxes) <= 0:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in source: {source_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None, 10)
 
-            target_bboxes, target_cnt = self.bbox_detect.main(
+            target_bboxes, _ = self.bbox_detect.main(
                 bbox_detector=self.bbox_detector,
                 image=target_image_tensor,
                 threshold=0.5,
@@ -104,7 +115,8 @@ class FaceMorpher:
                 dilation_ratio=0.3,
                 by_ratio=True,
             )
-            if target_cnt <= 0:
+            target_bboxes = self._filter_size(target_bboxes)
+            if len(target_bboxes) <= 0:
                 tensor2pil(source_image_tensor).save(result_image_path)
                 print(f"{_CRED}[FaceMorph] no face detected in target: {target_image_path}{_CEND}")
                 return (False, source_image_path, target_image_path, None, 11)
@@ -194,7 +206,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Face Morph')
     parser.add_argument('--workdir', required=True, type=str, default="")
     parser.add_argument('--refface', required=True, type=str, default="")
-    parser.add_argument('--workers', required=False, type=int, default=2)
+    parser.add_argument('--workers', required=False, type=int, default=4)
     parser.add_argument('--mpthres', required=False, type=float, default=1e-7)
     parser.add_argument('--genvideo', action='store_true', default=False)
     args, _ = parser.parse_known_args()
@@ -205,7 +217,7 @@ if __name__ == "__main__":
     _RESULT_IMAGE_PATH = f"{args.workdir}/{args.refface}_morphed_face"
     _SKIPED_IMAGE_LIST = f"{args.workdir}/{args.refface}_skipped.txt"
     _FFMPEG_FILES_LIST = f"{args.workdir}/{args.refface}_morphed.txt"
-    _N = min(8, max(1, args.workers))
+    _N = min(12, max(1, args.workers))
 
     if not os.path.exists(_RESULT_IMAGE_PATH):
         os.makedirs(_RESULT_IMAGE_PATH, exist_ok=True)
