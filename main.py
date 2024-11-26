@@ -39,7 +39,7 @@ class FaceMorpher:
     def _ref_faces_np(workdir: str, ref_face: str):
         faces_source_np, faces_target_np = [], []
         for ext in _IMAGE_EXTENSIONS:
-            for f in glob.iglob(f"{ref_face}_*{ext}", root_dir=workdir):
+            for f in glob.iglob(f"{ref_face}*{ext}", root_dir=workdir):
                 face_pil = Image.open(f"{workdir}/{f}").convert('RGB')
                 if f.startswith(f"{ref_face}_source_"):
                     faces_source_np.append(pil2np(face_pil))
@@ -47,6 +47,8 @@ class FaceMorpher:
                     faces_target_np.append(pil2np(face_pil))
                 else:
                     faces_source_np.append(pil2np(face_pil))
+        if len(faces_target_np) <= 0:
+            faces_target_np = faces_source_np.copy()
         if len(faces_source_np) > 0:
             return (faces_source_np, faces_target_np)
         raise FileNotFoundError(f"`{ref_face}` not found in {workdir}")
