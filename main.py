@@ -37,7 +37,7 @@ class FaceMorpher:
 
     @staticmethod
     def _ref_faces_np(workdir: str, ref_face: str):
-        faces_source_np, faces_target_np = [], []
+        faces_source_np, faces_target_np, faces_negtive_np = [], [], []
         for ext in _IMAGE_EXTENSIONS:
             for f in glob.iglob(f"{ref_face}*{ext}", root_dir=workdir):
                 face_pil = Image.open(f"{workdir}/{f}").convert('RGB')
@@ -45,22 +45,37 @@ class FaceMorpher:
                     faces_source_np.append(pil2np(face_pil))
                 elif f.startswith(f"{ref_face}_target_"):
                     faces_target_np.append(pil2np(face_pil))
+                elif f.startswith(f"{ref_face}-"):
+                    faces_negtive_np.append(pil2np(face_pil))
                 else:
                     faces_source_np.append(pil2np(face_pil))
         if len(faces_target_np) <= 0:
             faces_target_np = faces_source_np.copy()
         if len(faces_source_np) > 0:
-            return (faces_source_np, faces_target_np)
+            return (faces_source_np, faces_target_np, faces_negtive_np)
         raise FileNotFoundError(f"`{ref_face}` not found in {workdir}")
     
     def _verify(self, image: Tensor, flag: str):
+        faces_source_np, faces_target_np, faces_negtive_np = self.ref_faces_np
         if flag == 'source':
-            ref_faces_np = self.ref_faces_np[0]
+            ref_faces_np = faces_source_np
         elif flag == 'target':
-            ref_faces_np = self.ref_faces_np[1]
+            ref_faces_np = faces_target_np
         else:
             ref_faces_np = []
         
+        for ref_face_np in faces_negtive_np:
+            same_face = DeepFace.verify(
+                ref_face_np,
+                pil2np(tensor2pil(image)),
+                model_name="Facenet512",
+                detector_backend="skip",
+                enforce_detection=False,
+                threshold=0.15,
+            )
+            if same_face["verified"]:
+                return False
+
         for ref_face_np in ref_faces_np:
             same_face = DeepFace.verify(
                 ref_face_np,
@@ -72,6 +87,7 @@ class FaceMorpher:
             )
             if same_face["verified"]:
                 return True
+        
         return False
     
     @staticmethod
